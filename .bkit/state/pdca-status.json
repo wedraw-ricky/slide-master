@@ -1,7 +1,7 @@
 {
   "features": {
     "ppt-service-rebuild": {
-      "phase": "design",
+      "phase": "do",
       "startedAt": "2026-09-04T12:02:19",
       "prd": "docs/00-pm/ppt-service-rebuild.prd.md",
       "decisions": {
@@ -18,11 +18,13 @@
         "산출물": "기획서 + 발표자료 둘 다"
       },
       "completed": [
-        "설치 문서 수정 (wdb-ppt-ui@8b9ba49)"
+        "설치 문서 수정 (wdb-ppt-ui@8b9ba49)",
+        "module-1: planner.md(248줄) + storyline.md(198줄) 계약 작성"
       ],
       "plan": "docs/01-plan/features/ppt-service-rebuild.plan.md",
-      "updatedAt": "2026-09-04T12:47:13",
-      "design": "docs/02-design/features/ppt-service-rebuild.design.md"
+      "updatedAt": "2026-09-04T13:04:09",
+      "design": "docs/02-design/features/ppt-service-rebuild.design.md",
+      "scope": "module-1 완료"
     }
   }
 }
