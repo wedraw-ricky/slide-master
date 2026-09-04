@@ -410,9 +410,102 @@ When Step 3 took the free-design default, the Step 4 Confirm UI page still offer
 
 ---
 
+### Step 3.5: Intake (MANDATORY)
+
+🚧 **GATE**: Step 3 complete.
+
+Collect the answers only the user can give. One short round, not a section-by-section interview.
+
+| Field | Question |
+|---|---|
+| `purpose` | 이 자료는 무엇을 위한 건가요? — 사내 예산·의사결정 승인 / 전략 제안 / 성과 보고 / 회사·서비스·프로그램 소개·제안서 / 교육·강의 / IR 투자 유치 |
+| `assignment` | 과제를 받으신 건가요, 직접 제안하시는 건가요? — **only when `purpose` is 사내 승인 or 전략 제안** |
+| `emphasis` | 이 자료에서 무엇을 중요하게 보시나요? |
+| `conclusion` | 결론적으로 무엇을 말하고 싶으신가요? |
+| `audience` | 누구에게 보여줍니까? |
+| `interests[]` | 그 청중이 무엇을 궁금해합니까? (복수) |
+| `doc_kind` | 발표자료 / 보고서 / 둘 다 |
+
+**Mandatory**: Draft candidate answers from `sources/` and present them alongside the blank fields. The user edits rather than composes.
+
+Write `<project_path>/intake.json`. `frame` is derived by `plan_spec.py`, never asked.
+
+**✅ Checkpoint — `intake.json` exists.**
+
+---
+
+### Step 3.6: Planner Phase (MANDATORY)
+
+🚧 **GATE**: `intake.json` exists.
+
+```
+Read references/planner.md
+```
+
+```bash
+python3 ${SKILL_DIR}/scripts/plan_spec.py <project_path> --scaffold
+```
+
+Fill each section from `sources/`. Follow the frame's rules — fact-required sections carry a `source:` line or stay at `status: 확인 필요`, and options appear only where the frame allows them.
+
+```bash
+python3 ${SKILL_DIR}/scripts/plan_spec.py <project_path> --check
+```
+
+**Hard rule**: Fix every reported error before advancing. Where a section is thin, draft `**1안**` / `**2안**` and ask the user to pick; do not ask the user to write the section.
+
+**✅ Checkpoint — `plan_spec.py --check` passes and every non-optional section is `확정`.**
+
+---
+
+### Step 3.7: Storyline Phase (MANDATORY)
+
+🚧 **GATE**: `plan_spec.md` passes its check.
+
+```
+Read references/storyline.md
+```
+
+```bash
+python3 ${SKILL_DIR}/scripts/outline.py <project_path> --propose
+python3 ${SKILL_DIR}/scripts/outline.py <project_path> --scaffold --flow <chosen>
+```
+
+Present both flows with a one-line reason each and let the user pick one. Then fill `title` / `screen` / `script` on every row and hand the outline to the user for editing.
+
+**Outline editing surface** — the confirm server exposes the artifact; the page reads and writes it:
+
+| Endpoint | Use |
+|---|---|
+| `GET /api/planning` | Which artifacts exist |
+| `GET /api/planning/outline` | Read `outline.md` |
+| `POST /api/planning/outline` | Save the user's edits |
+
+```bash
+python3 ${SKILL_DIR}/scripts/confirm_ui/server.py <project_path> --wait-planning outline --wait-timeout 0
+```
+
+**Note**: `--wait-planning` is independent of the three-stage machine; it blocks on the file, not on `result.json`.
+
+```bash
+python3 ${SKILL_DIR}/scripts/outline.py <project_path> --check
+```
+
+**✅ Checkpoint — `outline.md` confirmed by the user and `outline.py --check` passes.**
+
+---
+
 ### Step 4: Strategist Phase (MANDATORY — cannot be skipped)
 
-🚧 **GATE**: Step 3 complete; default free-design path taken, or (if triggered) template files copied or confirmed in place in the project.
+🚧 **GATE**: Steps 3, 3.5, 3.6 and 3.7 complete — `intake.json`, `plan_spec.md` and a user-confirmed `outline.md` all exist.
+
+**Hard rule**: `design_spec.md §IX` is generated, never authored. After writing the other sections, run:
+
+```bash
+python3 ${SKILL_DIR}/scripts/outline.py <project_path> --render
+```
+
+Editing §IX by hand breaks the direction between the outline and the deck and is caught by `outline.py --check`.
 
 First, read the role definition:
 ```

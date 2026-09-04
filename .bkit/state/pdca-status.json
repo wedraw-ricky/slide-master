@@ -19,12 +19,14 @@
       },
       "completed": [
         "설치 문서 수정 (wdb-ppt-ui@8b9ba49)",
-        "module-1: planner.md(248줄) + storyline.md(198줄) 계약 작성"
+        "module-1: planner.md(248줄) + storyline.md(198줄) 계약 작성",
+        "module-2: plan_spec.py (골격 스캐폴드 + 유형별 검증)",
+        "module-3: outline.py (골든서클 배치 + §IX 생성 + 동기화 검사)"
       ],
       "plan": "docs/01-plan/features/ppt-service-rebuild.plan.md",
-      "updatedAt": "2026-09-04T13:04:09",
+      "updatedAt": "2026-09-04T13:09:49",
       "design": "docs/02-design/features/ppt-service-rebuild.design.md",
-      "scope": "module-1 완료"
+      "scope": "module-1,2,3 완료"
     }
   }
 }

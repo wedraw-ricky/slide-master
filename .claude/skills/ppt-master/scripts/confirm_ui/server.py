@@ -935,6 +935,86 @@ def create_app(
     def index():
         return send_from_directory(app.static_folder, 'index.html')
 
+    # --- Planning artifacts -------------------------------------------------
+    # These ride the same process but NOT the three-stage machine: they own
+    # their own files and their own shapes. Keeping them off _recommendation_
+    # stage() leaves the recommendations.json -> result.json contract untouched.
+
+    _PLANNING_FILES = {
+        'intake': ('intake.json', 'json'),
+        'plan-spec': ('plan_spec.md', 'text'),
+        'outline': ('outline.md', 'text'),
+    }
+
+    def _planning_path(name: str) -> Optional[Path]:
+        entry = _PLANNING_FILES.get(name)
+        return None if entry is None else project_path / entry[0]
+
+    @app.route('/api/planning/<name>', methods=['GET'])
+    def get_planning(name: str):
+        """Return one planning artifact as JSON or raw text."""
+        path = _planning_path(name)
+        if path is None:
+            return jsonify({'error': f'unknown artifact {name}'}), 404
+        if not path.is_file():
+            return jsonify({'error': f'{path.name} not found', 'exists': False}), 404
+        kind = _PLANNING_FILES[name][1]
+        try:
+            raw = path.read_text(encoding='utf-8')
+        except OSError as exc:
+            return jsonify({'error': str(exc)}), 500
+        body = {'exists': True, 'name': path.name,
+                'version': _file_version(path)}
+        if kind == 'json':
+            try:
+                body['data'] = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                return jsonify({'error': f'invalid JSON: {exc}'}), 500
+        else:
+            body['text'] = raw
+        resp = jsonify(body)
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+
+    @app.route('/api/planning/<name>', methods=['POST'])
+    def post_planning(name: str):
+        """Replace one planning artifact with the submitted content."""
+        path = _planning_path(name)
+        if path is None:
+            return jsonify({'error': f'unknown artifact {name}'}), 404
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({'error': 'expected a JSON object body'}), 400
+        kind = _PLANNING_FILES[name][1]
+        if kind == 'json':
+            data = payload.get('data')
+            if not isinstance(data, dict):
+                return jsonify({'error': 'expected object at .data'}), 400
+            text = json.dumps(data, ensure_ascii=False, indent=2) + '\n'
+        else:
+            text = payload.get('text')
+            if not isinstance(text, str):
+                return jsonify({'error': 'expected string at .text'}), 400
+        try:
+            path.write_text(text, encoding='utf-8')
+        except OSError as exc:
+            return jsonify({'error': str(exc)}), 500
+        logger.info('planning artifact saved: %s', path.name)
+        return jsonify({'saved': True, 'name': path.name,
+                        'version': _file_version(path)})
+
+    @app.route('/api/planning')
+    def list_planning():
+        """Report which planning artifacts exist, for the page to route on."""
+        out = {}
+        for key, (fname, _kind) in _PLANNING_FILES.items():
+            path = project_path / fname
+            out[key] = {'exists': path.is_file(),
+                        'version': _file_version(path) if path.is_file() else None}
+        resp = jsonify(out)
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+
     @app.route('/api/health')
     def health():
         """Expose a cheap readiness probe for the daemon launcher."""
@@ -1124,6 +1204,11 @@ def build_parser() -> argparse.ArgumentParser:
              'recover it on the recorded/default port so browser polling can resume.',
     )
     parser.add_argument(
+        '--wait-planning', metavar='{intake,plan-spec,outline}',
+        help='Block until the named planning artifact is written or changes, '
+             'then exit. Independent of the three-stage machine.',
+    )
+    parser.add_argument(
         '--wait-stage', default='final', metavar='{stage2,final}',
         help='With --wait-only, wait for this result.json stage (default: final). '
              'Use stage2 for the middle handoff in the three-stage flow.',
@@ -1146,6 +1231,37 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+PLANNING_ARTIFACTS = {
+    'intake': 'intake.json',
+    'plan-spec': 'plan_spec.md',
+    'outline': 'outline.md',
+}
+
+
+def _wait_planning(project_path: Path, name: str, timeout: int) -> int:
+    """Block until a planning artifact appears or its content changes.
+
+    Kept separate from the three-stage waiter: these artifacts have their own
+    files and never touch recommendations.json / result.json.
+    """
+    fname = PLANNING_ARTIFACTS.get(name)
+    if fname is None:
+        logger.error('--wait-planning must be one of: %s',
+                     ', '.join(PLANNING_ARTIFACTS))
+        return 2
+    path = project_path / fname
+    baseline = _file_version(path) if path.is_file() else None
+    logger.info('waiting for %s to be saved by the page', fname)
+    deadline = None if timeout <= 0 else time.time() + timeout
+    while deadline is None or time.time() < deadline:
+        time.sleep(1.0)
+        if path.is_file() and _file_version(path) != baseline:
+            logger.info('%s saved: %s', fname, path)
+            return 0
+    logger.error('timed out before %s was saved', fname)
+    return 1
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1160,6 +1276,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     if not project_path.is_dir():
         logger.error('%s is not a directory', project_path)
         return 1
+    if args.wait_planning:
+        return _wait_planning(project_path, args.wait_planning, args.wait_timeout)
+
     wait_stage = _stage_key(args.wait_stage)
     if wait_stage not in {'stage2', 'final'}:
         logger.error('--wait-stage must be stage2 or final')
